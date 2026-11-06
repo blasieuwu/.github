@@ -1,4 +1,4 @@
-from httpx import HTTPStatusError
+from httpx import HTTPStatusError, HTTPError, UnsupportedProtocol
 from dataclasses import dataclass
 from pathlib import Path
 import httpx
@@ -57,7 +57,7 @@ for data in commits_list:
 
 messages: list[str] = []
 for commit in commits:
-  messages.append(f"- [`[{commit.sha}]`]({commit.link}) - {commit.header} | **@{commit.author}**{f"\n  - {commit.description.strip()}" if commit.description != None else ""}")
+  messages.append(f"- [`[{commit.sha}]`]({commit.link}) - {commit.header} | **@{commit.author}**{f"\n{commit.description.strip()}" if commit.description != None else ""}")
 
 embed_header = f"<:github:1535885661683589161> │ GitHub Workflows/Actions\n# [[{repo.name} - {repo.branch}] {commit_count} new {'commits' if commit_count > 1 else "commit"}]({repo.link}/tree/{repo.branch})"
 
@@ -104,7 +104,13 @@ payload = {
   ]
 }
 
-res = httpx.post(f"{webhook}?with_components=true", json=payload)
+try:
+  res = httpx.post(f"{webhook}?with_components=true", json=payload)
+except httpx.UnsupportedProtocol as err:
+  if not webhook: # webhook was never provided in the first place
+    raise AssertionError("environment variable DISCORD_WEBHOOK was not provided.")
+  else:
+    raise UnsupportedProtocol("webhook url must be of http:// or https://") from err
 
 if res.status_code not in (200, 204):
   raise HTTPStatusError(f"discord webhook failed to send with error {res.status_code}", response=res, request=res.request)
